@@ -1,10 +1,12 @@
 # PowerShell temp files
 *.ps1.bak
 *.ps2
+*.ps1xml
 
 # Windows
 Thumbs.db
 Desktop.ini
+$RECYCLE.BIN/
 
 # Editor files
 *.swo
@@ -13,7 +15,31 @@ Desktop.ini
 *~
 .vscode/
 .idea/
+*.suo
+*.user
+*.vs/
 
 # OS junk
 .DS_Store
 .Directory
+.hidden
+
+# Build output
+bin/
+obj/
+*.msix
+*.appx
+*.msixupload
+*.appxupload
+
+# NuGet
+packages/
+*.nupkg
+
+# Backup files
+*.bak
+*.old
+*.orig
+
+# Logs
+*.log
