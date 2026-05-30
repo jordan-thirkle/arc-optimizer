@@ -1,0 +1,19 @@
+# PowerShell temp files
+*.ps1.bak
+*.ps2
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Editor files
+*.swo
+*.swn
+*.swp
+*~
+.vscode/
+.idea/
+
+# OS junk
+.DS_Store
+.Directory
