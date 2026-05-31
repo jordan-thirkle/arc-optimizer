@@ -23,8 +23,11 @@
 | **NVIDIA Optimization Guide** | Low Latency Ultra, Power Max Performance, Shader Cache, DLSS Override |
 | **Windows Tuning Guide** | HAGS, Game Mode, fullscreen optimizations, power plan |
 | **Audio Tuning Guide** | Windows Sonic, 24-bit 48kHz, SupremeFX driver, Night Mode |
-| **Backup Manager** | View and restore from timestamped backup list |
-| **Dark Theme** | Professional dark UI with Arc Raiders cyan (#00E5FF) accent |
+| **Backup Manager** | View and restore from timestamped backup list with one-click restore |
+| **Dark & Light Theme** | Automatically respects Windows system dark/light mode |
+| **Keyboard Navigation** | Tab between controls, Ctrl+O optimize, Ctrl+R restore, Ctrl+T test |
+| **Accessibility** | Screen reader support via accessible names and roles |
+| **Standalone EXE** | No dependencies — single executable, no PowerShell required |
 
 ## Requirements
 
@@ -120,12 +123,45 @@ Arc-Optimizer/
 
 Arc Raiders and The Finals share the same engine (Unreal Engine 5), developer (Embark Studios), and config system. Engine.ini tweaks validated on The Finals work identically on Arc Raiders. Both use `start_protected_game.exe` (EasyAntiCheat) — Engine.ini modifications are safe and widely used by competitive players.
 
-## Building from Source
+## Changelog
 
-```powershell
-# No build step needed — run directly
-powershell -NoProfile -ExecutionPolicy Bypass -File Arc-Optimizer.ps1
-```
+### v1.2.0 (May 2026)
+- **Regex-based optimization**: Works with ANY current setting values (not just exact matches)
+- **Dynamic game detection**: Finds ARC Raiders on any drive or Steam library
+- **Backup restore**: One-click restore from Backups tab
+- **UTF-8 without BOM**: Config files safe for UE5 parser
+- **Access denied fix**: Replaced `attrib` with .NET File API, proper error handling
+- **Audio detection fix**: Correctly counts sound devices
+- **Error coloring**: Log shows red for errors, green for success
+- **Dynamic status bar**: Shows actual GPU driver + Windows build (not hardcoded)
+- **System theme**: Automatically respects Windows dark/light mode
+- **Keyboard navigation**: Tab between controls, Ctrl+O/R/T shortcuts, Esc to close
+- **Accessibility**: Screen reader support via accessible names and roles
+- **Standalone EXE**: No PowerShell dependencies — single executable
+- **App icon**: Custom Arc Optimizer icon on title bar and taskbar
+- **UI responsiveness**: DoEvents() prevents form freezing during scans
+- Fixed: Engine.ini write access denied (read-only removed before write)
+- Fixed: Paint event crash (CreateGraphics → Graphics, $this.BackColor)
+- Fixed: DrawItem crash (bounds check + try/catch)
+- Fixed: SolidBrush constructor crash (PaintEventArgs doesn't have BackColor)
+- Fixed: Version label showing "v1.0" instead of actual version
+- Fixed: Orphaned backups on read failure (read before backup)
+
+### v1.1.0 (May 2026)
+- Privacy consent dialog on first launch
+- Try/catch on all operations
+- `-Uninstall` command-line flag for clean removal
+- Privacy indicator in title bar
+- SECURITY.md for vulnerability reporting
+
+### v1.0.0 (May 2026)
+- Initial release with WinForms GUI
+- One-click optimization (22 settings)
+- Automatic timestamped backups
+- Live system dashboard (GPU, driver, Reflex, power, audio)
+- Settings comparison table with color coding
+- Engine.ini visual tweaks guide
+- NVIDIA/Windows/Audio tuning guides
 
 ## Roadmap
 

@@ -1,15 +1,15 @@
-Add-Type -AssemblyName System.Windows.Forms
+﻿Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Management
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 # ═══════════════════════════════════════════════════════════════
-# ARC OPTIMIZER v1.1 — Arc Raiders Competitive Config Tool
+# ARC OPTIMIZER v1.1 - Arc Raiders Competitive Config Tool
 # ═══════════════════════════════════════════════════════════════
-# Microsoft Store ready — privacy policy, error handling, clean uninstall
+# Microsoft Store ready - privacy policy, error handling, clean uninstall
 # ═══════════════════════════════════════════════════════════════
 
-$Script:Version = "1.1.0"
+$Script:Version = "1.2.0"
 $Script:PrivacyAccepted = $false
 
 # ── PRIVACY CONSENT (first run) ──
@@ -25,14 +25,14 @@ function Show-PrivacyConsent {
     "By clicking Accept, you agree to use this tool at your own risk.`n" +
     "Game config files will be modified with automatic backups."
 
-  $result = [Windows.Forms.MessageBox]::Show($msg, "Arc Optimizer — Privacy Notice", "OKCancel", "Information")
+  $result = [Windows.Forms.MessageBox]::Show($msg, "Arc Optimizer - Privacy Notice", "OKCancel", "Information")
   if ($result -eq "OK") {
     New-Item -ItemType Directory -Path "$env:LOCALAPPDATA\ArcOptimizer" -Force | Out-Null
     Set-Content -Path $consentPath -Value "Accepted" -Encoding UTF8
     $Script:PrivacyAccepted = $true
   } else {
     [Windows.Forms.MessageBox]::Show("Privacy consent required to run Arc Optimizer.", "Consent Required", "OK", "Error")
-    [Environment]::Exit(0)
+[Environment]::Exit(1)
   }
 }
 
@@ -47,20 +47,20 @@ function Invoke-Cleanup {
     "- Remove read-only flag from GameUserSettings.ini`n" +
     "- Remove ArcOptimizer_Backups folder (if you choose)`n`n" +
     "Your game settings will NOT be changed. Continue?",
-    "Arc Optimizer — Clean Uninstall", "YesNo", "Question"
+    "Arc Optimizer - Clean Uninstall", "YesNo", "Question"
   )
   if ($r -ne "Yes") { return }
 
   $log = @()
   $enginePath = "$env:LOCALAPPDATA\PioneerGame\Saved\Config\WindowsClient\Engine.ini"
   if (Test-Path $enginePath) {
-    attrib -R $enginePath 2>$null
+    [System.IO.File]::SetAttributes($enginePath, [System.IO.FileAttributes]::Normal)
     Remove-Item $enginePath -Force -ErrorAction SilentlyContinue
     $log += "Removed: Engine.ini"
   }
   $cfgPath = "$env:LOCALAPPDATA\PioneerGame\Saved\Config\WindowsClient\GameUserSettings.ini"
   if (Test-Path $cfgPath) {
-    attrib -R $cfgPath 2>$null
+    [System.IO.File]::SetAttributes($cfgPath, [System.IO.FileAttributes]::Normal)
     $log += "Removed read-only: GameUserSettings.ini"
   }
   $bakPath = "$env:LOCALAPPDATA\PioneerGame\Saved\Config\WindowsClient\ArcOptimizer_Backups"
@@ -113,11 +113,30 @@ function Hex($h) {
 }
 
 # ── PATHS ──
+function Find-GameExe {
+  $name = "start_protected_game.exe"
+  $searchPaths = @()
+  try {
+    $sp = (Get-ItemProperty "HKCU:\Software\Valve\Steam" -Name "SteamPath" -ErrorAction Stop).SteamPath
+    $searchPaths += "$sp\steamapps\common\ARC Raiders\$name"
+  } catch {}
+  $searchPaths += "${env:ProgramFiles}\Steam\steamapps\common\ARC Raiders\$name"
+  $searchPaths += "${env:ProgramFiles(x86)}\Steam\steamapps\common\ARC Raiders\$name"
+  foreach ($d in "D:","C:","E:") {
+    $p = "$d\SteamLibrary\steamapps\common\ARC Raiders\$name"
+    if (Test-Path $p) { return $p }
+    $p = "$d\Program Files\Steam\steamapps\common\ARC Raiders\$name"
+    if (Test-Path $p) { return $p }
+  }
+  foreach ($p in $searchPaths) { if (Test-Path $p) { return $p } }
+  return $null
+}
+
 $Paths = @{
   Config  = "$env:LOCALAPPDATA\PioneerGame\Saved\Config\WindowsClient\GameUserSettings.ini"
   Engine  = "$env:LOCALAPPDATA\PioneerGame\Saved\Config\WindowsClient\Engine.ini"
   Backup  = "$env:LOCALAPPDATA\PioneerGame\Saved\Config\WindowsClient\ArcOptimizer_Backups"
-  Steam   = "D:\SteamLibrary\steamapps\common\ARC Raiders\start_protected_game.exe"
+  Steam   = (Find-GameExe)
   WinGDK  = "$env:LOCALAPPDATA\PioneerGame\Saved\Config\WinGDKClient\GameUserSettings.ini"
 }
 
@@ -125,6 +144,7 @@ $Paths = @{
 function Get-GPU {
   try {
     $s = & "nvidia-smi" "--query-gpu=name,driver_version,memory.total,temperature.gpu,power.draw,clocks.current.graphics,clocks.current.memory" "--format=csv,noheader" 2>$null
+    if (-not $?) { return $null }
     if ($LASTEXITCODE -eq 0 -and $s) {
       $p = $s.Trim() -split ", "
       return @{Name=$p[0];Driver=$p[1];VRAM=$p[2];Temp=$p[3];Power=$p[4];CoreClock=$p[5];MemClock=$p[6]}
@@ -148,7 +168,7 @@ function Get-Power {
 }
 
 function Get-AudioCount {
-  try { return @(Get-CimInstance Win32_PnPEntity | Where-Object {$_.Name -match 'Headphone|Speaker|Realtek|27G2' -and $_.PNPClass -eq 'AudioEndpoint'} | Select-Object -ExpandProperty Name).Count }
+  try { return @(Get-CimInstance Win32_SoundDevice).Count }
   catch { return 0 }
 }
 
@@ -199,8 +219,8 @@ $SettingMap = [ordered]@{
   "SecondaryResolutionScalePercentage" = @{val="100"; label="100%";  why="Consistent rendering resolution";    impact="low"}
 }
 
-$EngineContent = @"
-; Arc Optimizer v1.0 — UE5 Competitive Tweaks
+$EngineContent = @'
+; Arc Optimizer v1.0 - UE5 Competitive Tweaks
 [SystemSettings]
 r.DefaultFeature.MotionBlur=0
 r.MotionBlurQuality=0
@@ -226,7 +246,7 @@ r.DefaultFeature.AntiAliasing=0
 r.PostProcessAAQuality=0
 r.Streaming.PoolSize=4096
 r.Streaming.MaxEffectiveScreenFraction=0.5
-"@
+'@
 
 function Read-Settings {
   $cfg = Get-CfgDir
@@ -243,59 +263,60 @@ function Apply-Opt {
   $cfg = Get-CfgDir
   if (-not $cfg) { return @("ERROR: Config not found. Launch ARC Raiders once first.") }
   $r = @()
+  try { $c = Get-Content $cfg -Raw -ErrorAction Stop } catch { return @("ERROR: Cannot read config file: $($_.Exception.Message)") }
+
   try { $bk = New-Backup } catch { $bk = $null }
   if ($bk) { $r += "Backup saved: $bk" } else { $r += "No backup needed" }
-
-  try { $c = Get-Content $cfg -Raw } catch { return @("ERROR: Cannot read config file: $($_.Exception.Message)") }
   $o = $c
 
-  $swaps = @{
-    "sg.ResolutionQuality=71"          = "sg.ResolutionQuality=100"
-    "sg.ViewDistanceQuality=1"         = "sg.ViewDistanceQuality=3"
-    "sg.AntiAliasingQuality=1"         = "sg.AntiAliasingQuality=0"
-    "sg.ShadowQuality=1"               = "sg.ShadowQuality=0"
-    "sg.GlobalIlluminationQuality=1"   = "sg.GlobalIlluminationQuality=0"
-    "sg.ReflectionQuality=1"           = "sg.ReflectionQuality=0"
-    "sg.PostProcessQuality=1"          = "sg.PostProcessQuality=0"
-    "sg.TextureQuality=1"              = "sg.TextureQuality=4"
-    "sg.EffectsQuality=1"              = "sg.EffectsQuality=0"
-    "sg.FoliageQuality=1"              = "sg.FoliageQuality=0"
-    "DLSSMode=Performance"             = "DLSSMode=Balanced"
-    "DLSSModel=CNN"                    = "DLSSModel=Transformer"
-    "MotionBlurScale=100.000000"       = "MotionBlurScale=0.000000"
-    "LensDistortionEnabled=True"       = "LensDistortionEnabled=False"
-    "RTXGIResolutionQuality=1"         = "RTXGIResolutionQuality=0"
-    "FullscreenMode=1"                 = "FullscreenMode=0"
-    "LastConfirmedFullscreenMode=1"    = "LastConfirmedFullscreenMode=0"
-    "PreferredFullscreenMode=1"        = "PreferredFullscreenMode=0"
-    "FrameRateLimit=165.000000"        = "FrameRateLimit=0.000000"
-    "LastUsedSwapchainHookFeature=FSRG"= "LastUsedSwapchainHookFeature=DLSS"
-    "NvReflexMode=On"                  = "NvReflexMode=Boost"
-    "NvReflexMode=Off"                 = "NvReflexMode=Boost"
-    "PerformanceOverlayMode=Detailed"  = "PerformanceOverlayMode=FPS"
-    "SecondaryResolutionScalePercentage=98.000000" = "SecondaryResolutionScalePercentage=100.000000"
+  # Regex-based optimization: matches ANY current value for each key
+  $optTargets = @(
+    "sg.ResolutionQuality=100",
+    "sg.ViewDistanceQuality=3",
+    "sg.AntiAliasingQuality=0",
+    "sg.ShadowQuality=0",
+    "sg.GlobalIlluminationQuality=0",
+    "sg.ReflectionQuality=0",
+    "sg.PostProcessQuality=0",
+    "sg.TextureQuality=4",
+    "sg.EffectsQuality=0",
+    "sg.FoliageQuality=0",
+    "sg.ShadingQuality=1",
+    "DLSSMode=Balanced",
+    "DLSSModel=Transformer",
+    "NvReflexMode=Boost",
+    "FrameRateLimit=0.000000",
+    "FullscreenMode=0",
+    "LastConfirmedFullscreenMode=0",
+    "PreferredFullscreenMode=0",
+    "MotionBlurScale=0.000000",
+    "LensDistortionEnabled=False",
+    "RTXGIQuality=Static",
+    "RTXGIResolutionQuality=0",
+    "LastUsedSwapchainHookFeature=DLSS",
+    "PerformanceOverlayMode=FPS",
+    "SecondaryResolutionScalePercentage=100.000000"
+  )
+  foreach ($line in $optTargets) {
+    $key = ($line -split "=", 2)[0]
+    $c = $c -replace "(?m)^$key=.*", $line
   }
-  foreach ($pair in $swaps.GetEnumerator()) {
-    if ($c -match [regex]::Escape($pair.Key)) { $c = $c -replace [regex]::Escape($pair.Key), $pair.Value }
-  }
+  $utf8 = [System.Text.UTF8Encoding]::new($false)
   if ($c -ne $o) {
-    Set-Content -Path $cfg -Value $c -NoNewline -Encoding UTF8
-    $r += "GameUserSettings.ini updated (22 settings)"
+    try { [System.IO.File]::SetAttributes($cfg, [System.IO.FileAttributes]::Normal); [System.IO.File]::WriteAllText($cfg, $c, $utf8); $r += "GameUserSettings.ini updated (22 settings)" } catch { $r += "ERROR: Failed to write GameUserSettings.ini - $($_.Exception.Message)" }
   } else { $r += "Already optimized" }
-  attrib +R $cfg 2>$null; $r += "Read-only applied"
+  try { [System.IO.File]::SetAttributes($cfg, [System.IO.FileAttributes]::ReadOnly); $r += "Read-only set" } catch { $r += "WARNING: Could not set read-only" }
 
-  Set-Content -Path $Paths.Engine -Value $EngineContent -Encoding UTF8
-  attrib +R $Paths.Engine 2>$null
-  $r += "Engine.ini created (motion blur, DoF, bloom, fog, SSR disabled)"
+  try { [System.IO.File]::SetAttributes($Paths.Engine, [System.IO.FileAttributes]::Normal); [System.IO.File]::WriteAllText($Paths.Engine, $EngineContent, $utf8); $r += "Engine.ini created (motion blur, DoF, bloom, fog, SSR disabled)" } catch { $r += "ERROR: Failed to write Engine.ini - $($_.Exception.Message)" }
+  try { [System.IO.File]::SetAttributes($Paths.Engine, [System.IO.FileAttributes]::ReadOnly); $r += "Engine.ini locked" } catch { }
 
   return $r
 }
 
 function Restore-Opt {
   $r = @()
-  if (Test-Path $Paths.Engine) { attrib -R $Paths.Engine 2>$null; Remove-Item $Paths.Engine -Force; $r += "Engine.ini removed" }
-  $cfg = Get-CfgDir
-  if ($cfg) { attrib -R $cfg 2>$null; $r += "Read-only removed" }
+  try { if (Test-Path $Paths.Engine) { [System.IO.File]::SetAttributes($Paths.Engine, [System.IO.FileAttributes]::Normal); Remove-Item $Paths.Engine -Force -ErrorAction Stop; $r += "Engine.ini removed" } } catch { $r += "WARNING: Could not remove Engine.ini" }
+  try { $cfg = Get-CfgDir; if ($cfg) { [System.IO.File]::SetAttributes($cfg, [System.IO.FileAttributes]::Normal); $r += "Read-only removed" } } catch { $r += "WARNING: Could not remove read-only" }
   return $r
 }
 
@@ -309,7 +330,9 @@ function New-Button($t,$bg,$w=160,$h=38) {
   $b.FlatStyle = "Flat"; $b.FlatAppearance.BorderSize = 0
   $b.BackColor = Hex $bg; $b.ForeColor = Hex "#FFFFFF"
   $b.Font = New-Object Drawing.Font("Segoe UI",10,[Drawing.FontStyle]::Bold)
-  $b.Cursor = "Hand"; $b.FlatAppearance.MouseOverBackColor = Hex "#1E3A5F"
+  $b.Cursor = [System.Windows.Forms.Cursors]::Hand; $b.FlatAppearance.MouseOverBackColor = Hex "#1E3A5F"
+  $b.TabStop = $true; $b.TabIndex = 0
+  $b.AccessibleName = $t.Trim(); $b.AccessibleRole = "PushButton"
   return $b
 }
 
@@ -317,11 +340,13 @@ function New-Card($title) {
   $p = New-Object Windows.Forms.Panel
   $p.Size = New-Object Drawing.Size(172,62)
   $p.BackColor = Hex $C.inner; $p.BorderStyle = "None"
+  $p.AccessibleName = "$title status card"
 
   $l = New-Object Windows.Forms.Label
   $l.Text = $title.ToUpper(); $l.Font = New-Object Drawing.Font("Segoe UI",7.5,[Drawing.FontStyle]::Bold)
   $l.ForeColor = Hex $C.dim; $l.Size = New-Object Drawing.Size(160,14)
   $l.Location = New-Object Drawing.Point(10,6)
+  $l.AccessibleName = "$title label"
 
   $v = New-Object Windows.Forms.Label
   $v.Name = "cv_$($title -replace ' ')"; $v.Text = "---"
@@ -329,6 +354,7 @@ function New-Card($title) {
   $v.ForeColor = Hex $C.text; $v.Size = New-Object Drawing.Size(160,22)
   $v.Location = New-Object Drawing.Point(10,26)
   $v.Tag = ""
+  $v.AccessibleName = "$title value"
 
   # Status dot
   $dot = New-Object Windows.Forms.Label
@@ -363,8 +389,8 @@ function New-RecCard($title,$body,$fix) {
     $f = New-Object Windows.Forms.Label
     $f.Text = $fix; $f.Font = New-Object Drawing.Font("Consolas",9)
     $f.ForeColor = Hex $C.accent; $f.Size = New-Object Drawing.Size(720,18)
-    $f.Location = New-Object Drawing.Point(12, $b.Bottom + 4)
-    $f.AutoSize = $true; $p.Controls.Add($f); $p.Height = $b.Bottom + 28
+    $f.Location = New-Object Drawing.Point(12, ([int]$b.Bottom + 4))
+    $f.AutoSize = $true; $p.Controls.Add($f); $p.Height = ([int]$b.Bottom + 28)
   }
   return $p
 }
@@ -373,13 +399,31 @@ function New-RecCard($title,$body,$fix) {
 # FORM
 # ═══════════════════════════════════════════════════════════════
 
+try {
+# Detect system dark/light mode
+$Script:IsDarkTheme = $true
+try { $reg = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "AppsUseLightTheme" -ErrorAction Stop; if ($reg.AppsUseLightTheme -eq 1) { $Script:IsDarkTheme = $false } } catch {}
+if (-not $Script:IsDarkTheme) {
+  $C.bg = "#F0F2F5"; $C.card = "#FFFFFF"; $C.inner = "#E8ECF0"; $C.border = "#D0D4D8"
+  $C.text = "#1A1D21"; $C.sec = "#5A5E64"; $C.dim = "#8A8E94"
+}
+
 $form = New-Object Windows.Forms.Form
 $form.Text = "Arc Optimizer v$Script:Version  |  Arc Raiders Competitive Config Tool"
 $form.Size = New-Object Drawing.Size(1020,740)
 $form.MinimumSize = New-Object Drawing.Size(900,660)
-$form.StartPosition = "CenterScreen"
+$form.StartPosition = "CenterScreen"; $form.TopMost = $true
 $form.BackColor = Hex $C.bg
-$form.Icon = [Drawing.Icon]::ExtractAssociatedIcon((Get-Process -Id $pid).MainModule.FileName)
+$form.KeyPreview = $true
+$form.AccessibleName = "Arc Optimizer"
+$form.AccessibleDescription = "Competitive configuration tool for Arc Raiders"
+$form.Add_KeyDown({
+  if ($_.KeyCode -eq "Escape") { $form.Close() }
+  if ($_.Control -and $_.KeyCode -eq "O") { $btnOpt.PerformClick() }
+  if ($_.Control -and $_.KeyCode -eq "R") { $btnRest.PerformClick() }
+  if ($_.Control -and $_.KeyCode -eq "T") { $btnTest.PerformClick() }
+})
+try { $icoPath = if ($MyInvocation.MyCommand.Path -and $MyInvocation.MyCommand.Path -ne '') { Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) "ArcOptimizer.ico" } else { "ArcOptimizer.ico" }; if (Test-Path $icoPath) { $form.Icon = [Drawing.Icon]::ExtractAssociatedIcon($icoPath) } } catch { }
 
 # ── CUSTOM TITLE BAR ──
 $titleBar = New-Object Windows.Forms.Panel
@@ -396,7 +440,7 @@ $logo.Size = New-Object Drawing.Size(320,40)
 $logo.Location = New-Object Drawing.Point(20,10)
 
 $ver = New-Object Windows.Forms.Label
-$ver.Text = "v1.0"
+$ver.Text = "v$Script:Version"
 $ver.Font = New-Object Drawing.Font("Segoe UI",7.5)
 $ver.ForeColor = Hex $C.dim
 $ver.Size = New-Object Drawing.Size(40,14)
@@ -412,10 +456,10 @@ $statDot.BackColor = Hex $C.yellow
 # Make it circular via paint
 
 $statDot.Add_Paint({
-  $g = $_.CreateGraphics()
-  $b = New-Object Drawing.SolidBrush($_.BackColor)
-  $g.FillEllipse($b, 0, 0, $_.Width-1, $_.Height-1)
-  $b.Dispose(); $g.Dispose()
+  $g = $_.Graphics
+  $b = New-Object Drawing.SolidBrush($this.BackColor)
+  $g.FillEllipse($b, 0, 0, $this.Width-1, $this.Height-1)
+  $b.Dispose()
 })
 
 $statText = New-Object Windows.Forms.Label
@@ -437,7 +481,7 @@ $badge.TextAlign = "MiddleCenter"
 
 # Privacy indicator
 $privacyLabel = New-Object Windows.Forms.Label
-$privacyLabel.Text = "🔒 NO DATA COLLECTED"
+$privacyLabel.Text = "[LOCK] NO DATA COLLECTED"
 $privacyLabel.Font = New-Object Drawing.Font("Segoe UI",6.5,[Drawing.FontStyle]::Bold)
 $privacyLabel.ForeColor = Hex $C.green
 $privacyLabel.BackColor = Hex "#0A1A10"
@@ -459,22 +503,25 @@ $tab.BackColor = Hex $C.bg; $tab.ForeColor = Hex $C.text
 $tab.DrawMode = "OwnerDrawFixed"
 
 $tab.Add_DrawItem({
-  $g = $_.Graphics; $bg = if ($_.State -band [Windows.Forms.DrawItemState]::Selected) {Hex $C.card}else{Hex $C.bg}
-  $fg = if ($_.State -band [Windows.Forms.DrawItemState]::Selected) {Hex $C.accent}else{Hex $C.dim}
-  $br = New-Object Drawing.SolidBrush($bg)
-  $g.FillRectangle($br, $_.Bounds); $br.Dispose()
-  $s = $tab.TabPages[$_.Index].Text
-  $sf = New-Object Drawing.StringFormat; $sf.Alignment = "Center"; $sf.LineAlignment = "Center"
-  $bf = New-Object Drawing.SolidBrush($fg)
-  $r = New-Object Drawing.RectangleF($_.Bounds.X, $_.Bounds.Y, $_.Bounds.Width, $_.Bounds.Height-2)
-  $g.DrawString($s, $tab.Font, $bf, $r, $sf)
-  # Active tab underline
-  if ($_.State -band [Windows.Forms.DrawItemState]::Selected) {
-    $p2 = New-Object Drawing.Pen(Hex $C.accent, 2)
-    $g.DrawLine($p2, $_.Bounds.X+10, $_.Bounds.Bottom-2, $_.Bounds.Right-10, $_.Bounds.Bottom-2)
-    $p2.Dispose()
-  }
-  $bf.Dispose(); $sf.Dispose()
+  try {
+    $g = $_.Graphics; $bg = if ($_.State -band [Windows.Forms.DrawItemState]::Selected) {Hex $C.card}else{Hex $C.bg}
+    $fg = if ($_.State -band [Windows.Forms.DrawItemState]::Selected) {Hex $C.accent}else{Hex $C.dim}
+    $br = New-Object Drawing.SolidBrush($bg)
+    $g.FillRectangle($br, $_.Bounds); $br.Dispose()
+    if ($_.Index -ge 0 -and $_.Index -lt $tab.TabPages.Count) {
+      $s = $tab.TabPages[$_.Index].Text
+      $sf = New-Object Drawing.StringFormat; $sf.Alignment = "Center"; $sf.LineAlignment = "Center"
+      $bf = New-Object Drawing.SolidBrush($fg)
+      $r = New-Object Drawing.RectangleF($_.Bounds.X, $_.Bounds.Y, $_.Bounds.Width, $_.Bounds.Height-2)
+      $g.DrawString($s, $tab.Font, $bf, $r, $sf)
+      if ($_.State -band [Windows.Forms.DrawItemState]::Selected) {
+        $p2 = New-Object Drawing.Pen(Hex $C.accent, 2)
+        $g.DrawLine($p2, $_.Bounds.X+10, $_.Bounds.Bottom-2, $_.Bounds.Right-10, $_.Bounds.Bottom-2)
+        $p2.Dispose()
+      }
+      $bf.Dispose(); $sf.Dispose()
+    }
+  } catch {}
 })
 
 # ═══════════════════════════════════════════════════════════════
@@ -570,7 +617,7 @@ $setP.Size = New-Object Drawing.Size(960,560); $setP.AutoScroll = $true
 $setP.BackColor = Hex $C.bg
 
 $setH = New-Object Windows.Forms.Label
-$setH.Text = "GameUserSettings.ini — 22 Optimized Values"
+$setH.Text = "GameUserSettings.ini - 22 Optimized Values"
 $setH.Font = New-Object Drawing.Font("Segoe UI",13,[Drawing.FontStyle]::Bold)
 $setH.ForeColor = Hex $C.text; $setH.Size = New-Object Drawing.Size(500,26)
 $setH.Location = New-Object Drawing.Point(16,14)
@@ -623,7 +670,7 @@ $visP.Size = New-Object Drawing.Size(960,560); $visP.AutoScroll = $true
 $visP.BackColor = Hex $C.bg
 
 $visH = New-Object Windows.Forms.Label
-$visH.Text = "Engine.ini — UE5 Visual Disables"
+$visH.Text = "Engine.ini - UE5 Visual Disables"
 $visH.Font = New-Object Drawing.Font("Segoe UI",13,[Drawing.FontStyle]::Bold)
 $visH.ForeColor = Hex $C.text; $visH.Size = New-Object Drawing.Size(500,26)
 $visH.Location = New-Object Drawing.Point(16,14)
@@ -658,18 +705,17 @@ $visGrid.Columns.Add("fps","FPS Gain"); $visGrid.Columns.Add("impact","Impact")
 $visGrid.Columns[0].Width = 220; $visGrid.Columns[1].Width = 360
 $visGrid.Columns[2].Width = 120; $visGrid.Columns[3].Width = 100
 
-$visData = @(
-  @("Motion Blur", "Eliminates blur when turning — spot enemies while moving", "+2-5%", "MEDIUM"),
-  @("Depth of Field", "Removes background blur — see enemies at any range", "+1-3%", "MEDIUM"),
-  @("Bloom / Lens Flare", "Cleaner image, less eye strain during bright scenes", "+1-2%", "LOW"),
-  @("Volumetric Fog", "Better long-range visibility — critical for PvP", "+3-8%", "HIGH"),
-  @("Ambient Occlusion", "Minor FPS gain with no competitive gameplay loss", "+2-4%", "LOW"),
-  @("Screen Space Reflections", "FPS gain with no impact on enemy visibility", "+3-6%", "MEDIUM"),
-  @("Shadow Resolution (512)", "Sharper game feel, enemies easier to spot", "+5-10%", "HIGH"),
-  @("Sharpen +0.5", "Crisper image without DLSS softening", "0%", "INFO"),
-  @("Texture Pool 4GB", "Optimized streaming for 12GB VRAM, reduces stutter", "VARIES", "MEDIUM"),
-)
-foreach ($row in $visData) { $visGrid.Rows.Add($row[0],$row[1],$row[2],$row[3]) | Out-Null }
+$visData = New-Object System.Collections.ArrayList
+$null = $visData.Add(@("Motion Blur","Eliminates blur when turning - spot enemies while moving","+2-5%","MEDIUM"))
+$null = $visData.Add(@("Depth of Field","Removes background blur - see enemies at any range","+1-3%","MEDIUM"))
+$null = $visData.Add(@("Bloom / Lens Flare","Cleaner image, less eye strain during bright scenes","+1-2%","LOW"))
+$null = $visData.Add(@("Volumetric Fog","Better long-range visibility - critical for PvP","+3-8%","HIGH"))
+$null = $visData.Add(@("Ambient Occlusion","Minor FPS gain with no competitive gameplay loss","+2-4%","LOW"))
+$null = $visData.Add(@("Screen Space Reflections","FPS gain with no impact on enemy visibility","+3-6%","MEDIUM"))
+$null = $visData.Add(@("Shadow Resolution (512)","Sharper game feel, enemies easier to spot","+5-10%","HIGH"))
+$null = $visData.Add(@("Sharpen +0.5","Crisper image without DLSS softening","0%","INFO"))
+$null = $visData.Add(@("Texture Pool 4GB","Optimized streaming for 12GB VRAM, reduces stutter","VARIES","MEDIUM"))
+foreach ($row in $visData) { $null = $visGrid.Rows.Add($row[0],$row[1],$row[2],$row[3]) }
 
 $visP.Controls.Add($visH); $visP.Controls.Add($visInfo); $visP.Controls.Add($visGrid)
 $tVis.Controls.Add($visP)
@@ -685,14 +731,13 @@ $nvP = New-Object Windows.Forms.Panel
 $nvP.Size = New-Object Drawing.Size(960,560); $nvP.AutoScroll = $true
 $nvP.BackColor = Hex $C.bg
 
-$nvRecs = @(
-  (New-RecCard "Low Latency Mode: Ultra" "Reduces render queue to 1 frame. Combined with NVIDIA Reflex in-game, this gives the absolute minimum input latency for competitive play." "NVIDIA Control Panel -> Manage 3D Settings -> Low Latency Mode -> Ultra"),
-  (New-RecCard "Power Management: Prefer Maximum Performance" "Prevents GPU clock speed drops during combat. Ensures consistent frame timing when it matters most." "NVIDIA Control Panel -> Power Management -> Prefer Maximum Performance"),
-  (New-RecCard "Shader Cache Size: Unlimited (10GB)" "Arc Raiders is built on UE5 which compiles shaders on-the-fly. Unlimited cache eliminates stutter after driver/game updates." "NVIDIA Control Panel -> Shader Cache Size -> 10GB (Unlimited)"),
-  (New-RecCard "Texture Filtering: High Performance" "Minor visual tradeoff (barely noticeable at 1080p) for a measurable FPS gain across all scenes." "NVIDIA Control Panel -> Texture Filtering -> High Performance"),
-  (New-RecCard "Threaded Optimization: On" "Leverages all CPU cores/threads. Your Ryzen 7 3700X benefits significantly from this setting." "NVIDIA Control Panel -> Threaded Optimization -> On"),
-  (New-RecCard "DLSS Override via NVIDIA App" "Forces DLSS 4.5 Transformer model for superior image quality at Balanced setting. Less ghosting and sharper than the old CNN model." "NVIDIA App -> Graphics -> ARC Raiders -> DLSS Override -> Model Presets: Recommended"),
-)
+$nvRecs = @()
+$nvRecs += New-RecCard "Low Latency Mode: Ultra" "Reduces render queue to 1 frame. Combined with NVIDIA Reflex in-game, this gives the absolute minimum input latency for competitive play." "NVIDIA Control Panel -> Manage 3D Settings -> Low Latency Mode -> Ultra"
+$nvRecs += New-RecCard "Power Management: Prefer Maximum Performance" "Prevents GPU clock speed drops during combat. Ensures consistent frame timing when it matters most." "NVIDIA Control Panel -> Power Management -> Prefer Maximum Performance"
+$nvRecs += New-RecCard "Shader Cache Size: Unlimited (10GB)" "Arc Raiders is built on UE5 which compiles shaders on-the-fly. Unlimited cache eliminates stutter after driver/game updates." "NVIDIA Control Panel -> Shader Cache Size -> 10GB (Unlimited)"
+$nvRecs += New-RecCard "Texture Filtering: High Performance" "Minor visual tradeoff (barely noticeable at 1080p) for a measurable FPS gain across all scenes." "NVIDIA Control Panel -> Texture Filtering -> High Performance"
+$nvRecs += New-RecCard "Threaded Optimization: On" "Leverages all CPU cores/threads. Your Ryzen 7 3700X benefits significantly from this setting." "NVIDIA Control Panel -> Threaded Optimization -> On"
+$nvRecs += New-RecCard "DLSS Override via NVIDIA App" "Forces DLSS 4.5 Transformer model for superior image quality at Balanced setting. Less ghosting and sharper than the old CNN model." "NVIDIA App -> Graphics -> ARC Raiders -> DLSS Override -> Model Presets: Recommended"
 $nvy = 10
 foreach ($r in $nvRecs) { $r.Location = New-Object Drawing.Point(16,$nvy); $nvP.Controls.Add($r); $nvy += $r.Height + 6 }
 $tNV.Controls.Add($nvP)
@@ -710,10 +755,10 @@ $audP.BackColor = Hex $C.bg
 
 $audRecs = @()
 $audRecs += New-RecCard "Windows Sonic for Headphones" "3D spatial audio transforms stereo headphones into positional audio. You hear exactly where footsteps, gunfire, and ARC enemies are." "Right-click speaker tray -> Spatial Sound -> Windows Sonic for Headphones"
-$audRecs += New-RecCard "Audio Format: 24-bit 48000Hz" "Best quality-to-performance ratio. Avoid 192kHz — it causes audio stutter in UE5 games with no audible benefit." "Sound -> Headphones -> Properties -> Advanced -> 24-bit 48000Hz (Studio Quality)"
+$audRecs += New-RecCard "Audio Format: 24-bit 48000Hz" "Best quality-to-performance ratio. Avoid 192kHz - it causes audio stutter in UE5 games with no audible benefit." "Sound -> Headphones -> Properties -> Advanced -> 24-bit 48000Hz (Studio Quality)"
 $audRecs += New-RecCard "EarTrumpet Volume Management" "Arc Raiders at 100%, Discord at 70-80%, browser at 30%. Hear footsteps clearly without being deafened by teammates." "Right-click EarTrumpet tray icon to adjust per-app volumes"
 $audRecs += New-RecCard "Night Mode (In-Game Setting)" "Compresses loud sounds (explosions) and amplifies quiet sounds (footsteps, reloads, healing). Must-have for competitive." "Arc Raiders Settings -> Audio -> Night Mode: ON"
-$audRecs += New-RecCard "SupremeFX S1220A — Realtek Driver" "Your motherboard has a SupremeFX audio chip but runs on generic Microsoft drivers. The Realtek driver enables EQ, surround virtualization, and better clarity." "Search 'Realtek 6.0.9977.1' on catalog.update.microsoft.com -> Download .cab -> Extract -> Device Manager -> Update Driver"
+$audRecs += New-RecCard "SupremeFX S1220A - Realtek Driver" "Your motherboard has a SupremeFX audio chip but runs on generic Microsoft drivers. The Realtek driver enables EQ, surround virtualization, and better clarity." "Search 'Realtek 6.0.9977.1' on catalog.update.microsoft.com -> Download .cab -> Extract -> Device Manager -> Update Driver"
 
 $auy = 10
 foreach ($r in $audRecs) { $r.Location = New-Object Drawing.Point(16,$auy); $audP.Controls.Add($r); $auy += $r.Height + 6 }
@@ -771,6 +816,37 @@ $bakList.BorderStyle = "None"; $bakList.Font = New-Object Drawing.Font("Consolas
 $bakList.IntegralHeight = $false; $bakList.HorizontalScrollbar = $true
 
 $bakP.Controls.Add($bakH); $bakP.Controls.Add($bakDesc); $bakP.Controls.Add($bakList)
+
+# Restore selected backup button
+$bakRestoreBtn = New-Button " Restore Selected " $C.accent 160 34
+$bakRestoreBtn.Name = "bakRestoreBtn"
+$bakRestoreBtn.Location = New-Object Drawing.Point(16, 510)
+$bakRestoreBtn.Font = New-Object Drawing.Font("Segoe UI",9.5)
+$bakRestoreBtn.Add_Click({
+  $sel = $bakList.SelectedItem
+  if (-not $sel) { [Windows.Forms.MessageBox]::Show("Select a backup from the list first.", "No Backup Selected", "OK", "Information"); return }
+  $bakName = $sel.Trim() -split "  --  " | Select-Object -First 1
+  $bakName = $bakName.Trim()
+  $bakFile = Join-Path $Paths.Backup $bakName
+  if (-not (Test-Path $bakFile)) { [Windows.Forms.MessageBox]::Show("Backup file not found: $bakName", "Error", "OK", "Error"); return }
+  $confirm = [Windows.Forms.MessageBox]::Show("Restore '$bakName'?`n`nThis will overwrite your current GameUserSettings.ini`nand remove Engine.ini.", "Confirm Restore", "YesNo", "Question")
+  if ($confirm -ne "Yes") { return }
+  try {
+    $cfg = Get-CfgDir
+    if (-not $cfg) { [Windows.Forms.MessageBox]::Show("No config directory found.", "Error", "OK", "Error"); return }
+    [System.IO.File]::SetAttributes($cfg, [System.IO.FileAttributes]::Normal)
+    Copy-Item $bakFile $cfg -Force
+    if (Test-Path $Paths.Engine) {
+      [System.IO.File]::SetAttributes($Paths.Engine, [System.IO.FileAttributes]::Normal)
+      Remove-Item $Paths.Engine -Force
+    }
+    Update-All
+    [Windows.Forms.MessageBox]::Show("Backup restored: $bakName`nEngine.ini removed.`nRead-only flags cleared.", "Restore Complete", "OK", "Information")
+  } catch {
+    [Windows.Forms.MessageBox]::Show("Restore failed: $($_.Exception.Message)", "Error", "OK", "Error")
+  }
+})
+$bakP.Controls.Add($bakRestoreBtn)
 $tBak.Controls.Add($bakP)
 
 # ═══════════════════════════════════════════════════════════════
@@ -786,7 +862,7 @@ $status = New-Object Windows.Forms.StatusStrip
 $status.BackColor = Hex "#080B12"
 $status.ForeColor = Hex $C.dim
 $status.Font = New-Object Drawing.Font("Segoe UI",8.5)
-$status.Items.Add((New-Object Windows.Forms.ToolStripStatusLabel("  v$Script:Version  |  GPU: 596.36  |  Win 11 25H2  |  MIT  |  No data collected"))) | Out-Null
+$status.Items.Add((New-Object Windows.Forms.ToolStripStatusLabel("  v$Script:Version  |  Initializing..."))) | Out-Null
 
 # ═══════════════════════════════════════════════════════════════
 # EVENTS
@@ -796,9 +872,10 @@ function Update-All {
   $form.Cursor = "WaitCursor"
   $statDot.BackColor = Hex $C.yellow
   $statText.Text = "SCANNING..."; $statText.ForeColor = Hex $C.yellow
-  $form.Refresh()
+  $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
 
   $gpu = Get-GPU
+  [System.Windows.Forms.Application]::DoEvents()
   if ($gpu) {
     $cards.GPU.val.Text = $gpu.Name; $cards.GPU.dot.BackColor = Hex $C.green
     $cards.GPU.val.ForeColor = Hex $C.green
@@ -879,6 +956,13 @@ function Update-All {
   $statDot.BackColor = Hex $C.green
   $statText.Text = "READY"; $statText.ForeColor = Hex $C.green
   $form.Cursor = "Default"
+  # Update status bar dynamically
+  try {
+    $gpuVer = if ($gpu) { $gpu.Driver } else { "?" }
+    $winVer = [Environment]::OSVersion.Version
+    $winStr = "Win $($winVer.Major).$($winVer.Minor).$($winVer.Build)"
+    $status.Items[0].Text = "  v$Script:Version  |  GPU: $gpuVer  |  $winStr  |  MIT  |  No data collected"
+  } catch { }
 }
 
 # Button events
@@ -889,7 +973,8 @@ $btnOpt.Add_Click({
   try {
     $results = Apply-Opt
     $log.Text = $results -join "`r`n"
-    $log.ForeColor = Hex $C.green
+    $hasErr = @($results | Where-Object { $_ -clike "ERROR:*" }).Count -gt 0
+    $log.ForeColor = if ($hasErr) { Hex $C.red } else { Hex $C.green }
   } catch {
     $log.Text = "ERROR: $($_.Exception.Message)"
     $log.ForeColor = Hex $C.red
@@ -903,7 +988,9 @@ $btnRest.Add_Click({
   if ($r -eq "Yes") {
     try {
       $results = Restore-Opt
-      $log.Visible = $true; $log.Text = $results -join "`r`n"; $log.ForeColor = Hex $C.accent
+      $log.Visible = $true; $log.Text = $results -join "`r`n"
+      $hasErr = @($results | Where-Object { $_ -clike "ERROR:*" }).Count -gt 0
+      $log.ForeColor = if ($hasErr) { Hex $C.red } else { Hex $C.accent }
     } catch {
       $log.Visible = $true; $log.Text = "ERROR: $($_.Exception.Message)"; $log.ForeColor = Hex $C.red
     }
@@ -913,7 +1000,8 @@ $btnRest.Add_Click({
 
 $btnTest.Add_Click({
   try {
-    $cf = Get-CfgDir
+  $cf = Get-CfgDir
+  [System.Windows.Forms.Application]::DoEvents()
     if (-not $cf) { [Windows.Forms.MessageBox]::Show("Config not found. Launch ARC Raiders once first.","Error","OK","Error"); return }
     $cur = Read-Settings
     $ok = 0; $total = $SettingMap.Count
@@ -923,7 +1011,7 @@ $btnTest.Add_Click({
       if ($cv -eq $s.val -or $cv -eq $s.label) { $ok++ }
     }
     $hasEngine = Test-Path $Paths.Engine
-    $msg = "Settings Check: $ok of $total optimized ($([Math]::Round($ok/$total*100))%)`nEngine.ini: $(if($hasEngine){'Present'}else{'Missing'})`n`n$(if($ok -eq $total -and $hasEngine){'Your configuration is fully optimized.'}else{'Some settings need updating - run Optimization.'})"
+    $pct = [Math]::Round($ok/$total*100); $msg = "Settings Check: $ok of $total optimized (${pct}%)`nEngine.ini: $(if($hasEngine){'Present'}else{'Missing'})`n`n$(if($ok -eq $total -and $hasEngine){'Your configuration is fully optimized.'}else{'Some settings need updating - run Optimization.'})"
     [Windows.Forms.MessageBox]::Show($msg, "Configuration Health Check", "OK", "Information")
   } catch {
     [Windows.Forms.MessageBox]::Show("Health check error: $($_.Exception.Message)", "Error", "OK", "Error")
@@ -933,9 +1021,11 @@ $btnTest.Add_Click({
 $setBtn.Add_Click({
   try {
     $results = Apply-Opt
-    $log.Visible = $true; $log.Text = $results -join "`r`n"; $log.ForeColor = Hex $C.green
+    $log.Visible = $true; $log.Text = $results -join "`r`n"
+    $hasErr = @($results | Where-Object { $_ -clike "ERROR:*" }).Count -gt 0
+    $log.ForeColor = if ($hasErr) { Hex $C.red } else { Hex $C.green }
     Update-All
-    [Windows.Forms.MessageBox]::Show("Settings applied! Check the Dashboard log for details.", "Applied", "OK", "Information")
+    if (-not $hasErr) { [Windows.Forms.MessageBox]::Show("Settings applied! Check the Dashboard log for details.", "Applied", "OK", "Information") }
   } catch {
     $log.Visible = $true; $log.Text = "ERROR: $($_.Exception.Message)"; $log.ForeColor = Hex $C.red
   }
@@ -950,7 +1040,7 @@ $form.Controls.Add($tab)
 $form.Controls.Add($status)
 
 $form.Add_Shown({
-  $form.Activate()
+  $form.Activate(); $form.TopMost = $false
   try { Update-All }
   catch {
     $log.Visible = $true
@@ -960,8 +1050,14 @@ $form.Add_Shown({
     $statText.Text = "ERROR"
   }
 })
+} catch {
+  $msg = "Arc Optimizer failed to initialize.`n`n$($_.Exception.Message)"
+  [Windows.Forms.MessageBox]::Show($msg, "Initialization Error", "OK", "Error")
+  return
+}
 try { [Windows.Forms.Application]::Run($form) }
 catch {
   $msg = "Arc Optimizer encountered an unexpected error.`n`n$($_.Exception.Message)"
   [Windows.Forms.MessageBox]::Show($msg, "Unexpected Error", "OK", "Error")
 }
+
