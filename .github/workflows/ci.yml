@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install PowerShell
+      uses: actions/setup-powershell@v1
+
+    - name: Install PSScriptAnalyzer
+      shell: pwsh
+      run: Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+
+    - name: Run PSScriptAnalyzer (Syntax Validation)
+      shell: pwsh
+      run: |
+        $results = Invoke-PSScriptAnalyzer -Path "${{ github.workspace }}" -Severity Error -Recurse
+        if ($results) {
+          Write-Host "::error::PSScriptAnalyzer found errors:"
+          $results | ForEach-Object { Write-Host "::error::$($_.ScriptName):$($_.Line) $($_.Message)" }
+          exit 1
+        }
+        Write-Host "::notice::No PowerShell syntax errors found."
+
+    - name: Fallback Syntax Check (Parse Errors Only)
+      shell: pwsh
+      run: |
+        $hasErrors = $false
+        Get-ChildItem -Path "${{ github.workspace }}" -Filter *.ps1 -Recurse | ForEach-Object {
+          try {
+            $null = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$null)
+            Write-Host "  [OK] $($_.Name)"
+          } catch {
+            Write-Host "::error::Parse error in $($_.Name): $_"
+            $hasErrors = $true
+          }
+        }
+        if ($hasErrors) { exit 1 }
+        Write-Host "::notice::All PowerShell scripts parsed successfully."
